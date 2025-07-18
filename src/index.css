@@ -17,24 +17,46 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Reckkit Brand Colors */
+    --primary: 214 88% 52%; /* Reckkit Blue */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 214 88% 62%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 158 64% 52%; /* Reckkit Green */
+    --secondary-foreground: 0 0% 100%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 214 88% 97%;
+    --accent-foreground: 214 88% 52%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 214 88% 52%;
+
+    /* Custom Reckkit tokens */
+    --success: 158 64% 52%;
+    --success-foreground: 0 0% 100%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 0 0% 0%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(214 88% 52%), hsl(214 88% 62%));
+    --gradient-secondary: linear-gradient(135deg, hsl(158 64% 52%), hsl(158 64% 62%));
+    --gradient-background: linear-gradient(180deg, hsl(0 0% 100%), hsl(214 88% 98%));
+
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -2px hsl(214 88% 52% / 0.1);
+    --shadow-medium: 0 10px 30px -5px hsl(214 88% 52% / 0.15);
+    --shadow-strong: 0 20px 40px -10px hsl(214 88% 52% / 0.2);
+
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
     --radius: 0.5rem;
 
@@ -100,6 +122,119 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    background: var(--gradient-background);
+  }
+}
+
+@layer components {
+  /* Reckkit Button Variants */
+  .btn-reckkit {
+    @apply bg-primary text-primary-foreground px-6 py-3 rounded-lg font-semibold;
+    @apply hover:bg-primary/90 active:bg-primary/95;
+    @apply transition-all duration-300 ease-in-out;
+    @apply shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-medium)];
+    @apply hover:scale-105 active:scale-95;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .btn-reckkit:hover {
+    box-shadow: var(--shadow-medium);
+  }
+
+  .btn-secondary-reckkit {
+    @apply bg-secondary text-secondary-foreground px-6 py-3 rounded-lg font-semibold;
+    @apply hover:bg-secondary/90 active:bg-secondary/95;
+    @apply transition-all duration-300 ease-in-out;
+    @apply shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-medium)];
+    @apply hover:scale-105 active:scale-95;
+  }
+
+  /* Input Field Styling */
+  .input-reckkit {
+    @apply w-full px-4 py-3 rounded-lg border border-border;
+    @apply bg-background text-foreground placeholder:text-muted-foreground;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary;
+    @apply transition-all duration-300 ease-in-out;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .input-reckkit:focus {
+    box-shadow: var(--shadow-medium);
+  }
+
+  /* Card Styling */
+  .card-reckkit {
+    @apply bg-card text-card-foreground rounded-xl p-6;
+    @apply border border-border/50;
+    @apply transition-all duration-300 ease-in-out;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .card-reckkit:hover {
+    box-shadow: var(--shadow-medium);
+  }
+
+  /* Animation Classes */
+  .animate-fade-in {
+    @apply animate-in fade-in duration-500;
+  }
+
+  .animate-slide-up {
+    @apply animate-in slide-in-from-bottom-4 duration-500;
+  }
+
+  .animate-bounce-in {
+    animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  .drag-zone {
+    @apply border-2 border-dashed border-primary/30 rounded-lg p-8;
+    @apply transition-all duration-300 ease-in-out;
+    @apply hover:border-primary/60 hover:bg-accent/50;
+  }
+
+  .drag-zone.drag-over {
+    @apply border-primary bg-accent border-solid;
+    animation: pulse 1s infinite;
+  }
+
+  /* Loading Spinner */
+  .spinner {
+    @apply w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
   }
 }
