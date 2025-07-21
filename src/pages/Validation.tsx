@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { useUpload } from "../UploadContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
@@ -32,11 +32,13 @@ interface ValidationRule {
 }
 
 const Validation = () => {
+  const { artworkFile } = useUpload();
   const [isValidating, setIsValidating] = useState(false);
   const [validationProgress, setValidationProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("Ready to validate");
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  
+  const [cardLoading, setCardLoading] = useState<string | null>(null);
+  const [cardResults, setCardResults] = useState<Record<string, any>>({});
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([
     {
       id: 'layout',
@@ -47,22 +49,22 @@ const Validation = () => {
     },
     {
       id: 'barcode',
-      name: 'Barcode Placement',
+      name: 'Barcode validation',
       description: 'Verifying barcode position and readability',
       icon: <QrCode className="h-5 w-5" />,
       status: 'pending'
     },
     {
-      id: 'dimensions',
-      name: 'Dimension Compliance',
+      id: 'font',
+      name: 'Font Matching',
       description: 'Checking size and margin requirements',
       icon: <Ruler className="h-5 w-5" />,
       status: 'pending'
     },
     {
       id: 'colors',
-      name: 'Color Profile',
-      description: 'Validating color spaces and profiles',
+      name: 'Forbidden Color Check',
+      description: 'Checking for forbidden colors',
       icon: <Palette className="h-5 w-5" />,
       status: 'pending'
     },
@@ -82,69 +84,58 @@ const Validation = () => {
     }
   ]);
 
-  const handleValidation = async () => {
-    setIsValidating(true);
-    setValidationProgress(0);
-    
-    // Reset all rules to pending
-    setValidationRules(rules => rules.map(rule => ({ ...rule, status: 'pending' as const })));
-    
-    for (let i = 0; i < validationRules.length; i++) {
-      const rule = validationRules[i];
-      
-      // Set current rule to validating
-      setValidationRules(rules => 
-        rules.map(r => 
-          r.id === rule.id 
-            ? { ...r, status: 'validating' as const }
-            : r
-        )
-      );
-      
-      setCurrentStep(`Step ${i + 1}: ${rule.name}`);
-      
-      // Simulate validation time
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Randomly determine pass/fail for demo (weighted towards pass)
-      const passed = Math.random() > 0.2; // 80% pass rate
-      
-      const updatedRule: ValidationRule = {
-        ...rule,
-        status: passed ? 'passed' : 'failed',
-        details: passed 
-          ? `${rule.name} completed successfully` 
-          : `Issues found in ${rule.name.toLowerCase()}`,
-        errorDetails: passed 
-          ? undefined 
-          : `Example error: ${rule.description} failed validation criteria. Please review and adjust according to specifications.`
-      };
-      
-      setValidationRules(rules => 
-        rules.map(r => r.id === rule.id ? updatedRule : r)
-      );
-      
-      const progress = ((i + 1) / validationRules.length) * 100;
-      setValidationProgress(progress);
-    }
-    
-    setIsValidating(false);
-    setCurrentStep("Validation Complete");
-    
-    const passedCount = validationRules.filter(r => r.status === 'passed').length;
-    const totalCount = validationRules.length;
-    
-    if (passedCount === totalCount) {
+  const handleCardValidation = async (ruleId: string) => {
+    if (!artworkFile?.file) {
       toast({
-        title: "Validation Successful! ✅",
-        description: "All validation rules passed. Your artwork is ready for production!",
-      });
-    } else {
-      toast({
-        title: "Validation Issues Found",
-        description: `${totalCount - passedCount} issues found. Please review the failed items.`,
+        title: "No Artwork File",
+        description: "Please upload an artwork PDF before validating.",
         variant: "destructive"
       });
+      return;
+    }
+    setCardLoading(ruleId);
+    setValidationRules(rules => rules.map(rule => rule.id === ruleId ? { ...rule, status: 'validating' } : rule));
+    try {
+      let data: any = null;
+      if (ruleId === 'barcode') {
+        const formData = new FormData();
+        formData.append('file', artworkFile.file);
+        const response = await fetch("http://localhost:8000/validate_barcodes", {
+          method: "POST",
+          body: formData
+        });
+        if (!response.ok) throw new Error("Validation backend error");
+        data = await response.json();
+        setCardResults(results => ({ ...results, barcode: data }));
+        const barcodes = data.results?.flatMap((page: any) => page.barcodes) || [];
+        setValidationRules(rules => rules.map(rule => {
+          if (rule.id === 'barcode') {
+            if (barcodes.length > 0 && barcodes.every((b: any) => b.contrast_pass)) {
+              return {
+                ...rule,
+                status: 'passed',
+                details: `All barcodes passed contrast and were detected.`
+              };
+            } else {
+              return {
+                ...rule,
+                status: 'failed',
+                errorDetails: `Some barcodes failed contrast or were not detected.`
+              };
+            }
+          }
+          return rule;
+        }));
+      }
+    } catch (error) {
+      setValidationRules(rules => rules.map(rule => rule.id === ruleId ? { ...rule, status: 'failed', errorDetails: String(error) } : rule));
+      toast({
+        title: "Validation Error",
+        description: String(error),
+        variant: "destructive"
+      });
+    } finally {
+      setCardLoading(null);
     }
   };
 
@@ -191,58 +182,13 @@ const Validation = () => {
               Validate your artwork PDF against industry standards
             </p>
           </div>
-
-          {/* Progress Section */}
-          <Card className="card-reckkit animate-slide-up">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Validation Progress</span>
-                {(passedCount > 0 || failedCount > 0) && (
-                  <div className="flex gap-2">
-                    <Badge className="bg-success text-success-foreground">
-                      {passedCount} Passed
-                    </Badge>
-                    {failedCount > 0 && (
-                      <Badge variant="destructive">
-                        {failedCount} Failed
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </CardTitle>
-              <CardDescription>{currentStep}</CardDescription>
-            </CardHeader>
-            
-            <CardContent>
-              <div className="space-y-4">
-                <Progress value={validationProgress} className="h-3" />
-                <div className="text-center">
-                  <Button
-                    onClick={handleValidation}
-                    disabled={isValidating}
-                    className="btn-reckkit text-lg py-6 px-8"
-                  >
-                    {isValidating ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Validating Artwork...
-                      </>
-                    ) : (
-                      "Validate Artwork"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Validation Rules */}
           <div className="grid md:grid-cols-2 gap-6 animate-bounce-in">
             {validationRules.map((rule) => (
-              <Card 
-                key={rule.id} 
+              <Card
+                key={rule.id}
                 className={`card-reckkit cursor-pointer transition-all duration-300 ${
-                  rule.status === 'failed' ? 'border-destructive/50' : 
+                  rule.status === 'failed' ? 'border-destructive/50' :
                   rule.status === 'passed' ? 'border-success/50' : ''
                 }`}
                 onClick={() => setExpandedCard(expandedCard === rule.id ? null : rule.id)}
@@ -270,94 +216,37 @@ const Validation = () => {
                     {getStatusBadge(rule.status)}
                   </CardDescription>
                 </CardHeader>
-                
-                {(rule.details || rule.errorDetails) && (
+                {expandedCard === rule.id && (
                   <CardContent>
-                    <div className="flex items-center justify-between">
-                      <p className={`text-sm ${
-                        rule.status === 'failed' ? 'text-destructive' : 'text-success'
-                      }`}>
-                        {rule.details}
-                      </p>
-                      {(rule.errorDetails || rule.details) && (
-                        <Button variant="ghost" size="sm">
-                          {expandedCard === rule.id ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
+                    <div className="flex flex-col gap-4">
+                      {/* Per-card validation trigger */}
+                      <Button
+                        disabled={cardLoading === rule.id}
+                        onClick={e => { e.stopPropagation(); handleCardValidation(rule.id); }}
+                      >
+                        {cardLoading === rule.id ? "Validating..." : `Validate ${rule.name}`}
+                      </Button>
+                      {/* Show results for barcode validation as example */}
+                      {rule.id === 'barcode' && cardResults.barcode && (
+                        <div className="mt-2 p-2 border rounded bg-gray-50">
+                          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(cardResults.barcode, null, 2)}</pre>
+                        </div>
                       )}
+                      {/* Show details/errors */}
+                      {rule.details && <div className="text-green-700">{rule.details}</div>}
+                      {rule.errorDetails && <div className="text-red-700">{rule.errorDetails}</div>}
                     </div>
-                    
-                    {expandedCard === rule.id && rule.errorDetails && (
-                      <div className="mt-4 p-4 bg-destructive/10 rounded-lg border border-destructive/20 animate-slide-up">
-                        <h5 className="font-semibold text-destructive mb-2">Issue Details:</h5>
-                        <p className="text-sm text-destructive/80">
-                          {rule.errorDetails}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {expandedCard === rule.id && rule.status === 'passed' && (
-                      <div className="mt-4 p-4 bg-success/10 rounded-lg border border-success/20 animate-slide-up">
-                        <h5 className="font-semibold text-success mb-2">Validation Successful:</h5>
-                        <p className="text-sm text-success/80">
-                          This validation rule has been successfully completed. Your artwork meets the required standards for this criteria.
-                        </p>
-                      </div>
-                    )}
                   </CardContent>
                 )}
               </Card>
             ))}
           </div>
-
-          {/* Summary Section */}
-          {(passedCount > 0 || failedCount > 0) && (
-            <Card className="card-reckkit animate-fade-in">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {failedCount === 0 ? (
-                    <CheckCircle className="h-6 w-6 text-success" />
-                  ) : (
-                    <XCircle className="h-6 w-6 text-destructive" />
-                  )}
-                  Validation Summary
-                </CardTitle>
-                <CardDescription>
-                  {failedCount === 0 
-                    ? "Congratulations! Your artwork has passed all validation checks."
-                    : `${failedCount} issue(s) found that need to be addressed before production.`
-                  }
-                </CardDescription>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <div className="text-2xl font-bold">{totalCount}</div>
-                    <div className="text-sm text-muted-foreground">Total Checks</div>
-                  </div>
-                  <div className="p-4 bg-success/10 rounded-lg">
-                    <div className="text-2xl font-bold text-success">{passedCount}</div>
-                    <div className="text-sm text-muted-foreground">Passed</div>
-                  </div>
-                  <div className="p-4 bg-destructive/10 rounded-lg">
-                    <div className="text-2xl font-bold text-destructive">{failedCount}</div>
-                    <div className="text-sm text-muted-foreground">Failed</div>
-                  </div>
-                </div>
-                
-                {failedCount === 0 && (
-                  <div className="mt-6 text-center">
-                    <Button className="btn-secondary-reckkit">
-                      Download Validation Report
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {failedCount === 0 && (
+            <div className="mt-6 text-center">
+              <Button className="btn-secondary-reckkit">
+                Download Validation Report
+              </Button>
+            </div>
           )}
         </div>
       </div>

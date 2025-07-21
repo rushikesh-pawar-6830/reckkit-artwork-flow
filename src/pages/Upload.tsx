@@ -1,4 +1,5 @@
 import { useState, useRef, DragEvent } from "react";
+import { useUpload } from "../UploadContext";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,8 +14,7 @@ interface UploadedFile {
 }
 
 const Upload = () => {
-  const [mdfFile, setMdfFile] = useState<UploadedFile | null>(null);
-  const [artworkFile, setArtworkFile] = useState<UploadedFile | null>(null);
+  const { mdfFile, setMdfFile, artworkFile, setArtworkFile } = useUpload();
   const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
   
